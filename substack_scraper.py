@@ -1024,6 +1024,9 @@ class BaseSubstackScraper(ABC):
                 md_filepath = os.path.join(self.md_save_dir, md_filename)
 
                 if not os.path.exists(md_filepath):
+                    if self.download_images:
+                        post_slug = get_post_slug(url)
+                        md = process_markdown_images(md, self.writer_name, post_slug)
                     self.save_to_file(md_filepath, md)
 
                     essays_data.append({
@@ -1038,6 +1041,15 @@ class BaseSubstackScraper(ABC):
                     })
                 else:
                     print(f"File already exists: {md_filepath}")
+                    if self.download_images:
+                        post_slug = get_post_slug(url)
+                        with open(md_filepath, 'r', encoding='utf-8') as f:
+                            existing_md = f.read()
+                        updated_md = process_markdown_images(existing_md, self.writer_name, post_slug)
+                        if updated_md != existing_md:
+                            with open(md_filepath, 'w', encoding='utf-8') as f:
+                                f.write(updated_md)
+                            print(f"Updated images in: {md_filepath}")
             except Exception as e:
                 print(f"Error scraping post: {e}")
             count += 1
