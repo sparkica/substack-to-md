@@ -1,110 +1,100 @@
-﻿# Substack2Markdown
+# Substack essay backup — Between Code and Culture
 
-Substack2Markdown is a Python tool for downloading free and premium Substack posts and saving them as both Markdown and 
-HTML files, and includes a simple HTML interface to browse and sort through the posts. It will save paid for content as 
-long as you're subscribed to that substack. 
+A Python scraper that downloads published essays from [Between Code and Culture](https://www.between-code-and-culture.tech/) and saves them as Markdown files. Used as a personal backup of published essays.
 
-🆕 @Firevvork has built a web version of this tool at [Substack Reader](https://www.substacktools.com/reader) - no 
-installation required! (Works for free Substacks only.)
-
-
-![Substack2Markdown Interface](./assets/images/screenshot.png)
-
-Once you run the script, it will create a folder named after the substack in `/substack_md_files`,
-and then begin to scrape the substack URL, converting the blog posts into markdown files. Once all the posts have been
-saved, it will generate an HTML file in `/substack_html_pages` directory that allows you to browse the posts.
-
-You can either hardcode the substack URL and the number of posts you'd like to save into the top of the file, or 
-specify them as command line arguments.
+Essays are saved to `published_md/between-code-and-culture/` with frontmatter metadata (title, subtitle, author, publication, date).
 
 ## Features
 
-- Converts Substack posts into Markdown files.
-- Generates an HTML file to browse Markdown files.
-- Supports free and premium content (with subscription).
-- Supports scraping a single post URL directly (for example, `/p/my-post`).
-- Can download Substack-hosted images locally with `--images`.
-- The HTML interface allows sorting essays by date or likes.
+- Scrapes all posts or a specific number
+- Supports a single post URL via `--url https://...substack.com/p/my-post`
+- Downloads Substack-hosted images locally with `--images`
+- Generates a browsable HTML interface (`substack_html_pages/`)
+- Supports premium (paid) content when logged in
 
-## Installation
-
-Clone the repo and install the dependencies:
+## Setup
 
 ```bash
-git clone https://github.com/yourusername/substack_scraper.git
-cd substack_scraper
+git clone <repo>
+cd substack-to-md
 
-# # Optinally create a virtual environment
-# python -m venv venv
-# # Activate the virtual environment
+# Optional: create a virtual environment
+python -m venv venv
+source venv/bin/activate  # macOS/Linux
 # .\venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Linux
 
 pip install -r requirements.txt
 ```
 
-For the premium scraper, update the `config.py` in the root directory with your Substack email and password:
+Copy `.env.example` to `.env` and fill in your Substack credentials (required for premium content):
 
-```python
-EMAIL = "your-email@domain.com"
-PASSWORD = "your-password"
+```bash
+cp .env.example .env
 ```
 
-You'll also need Microsoft Edge installed for the Selenium webdriver.
+```
+SUBSTACK_EMAIL=your@email.com
+SUBSTACK_PASSWORD=yourpassword
+```
+
+Requires Chrome for Selenium-based premium scraping.
 
 ## Usage
 
-Specify the Substack URL and the directory to save the posts to:
+The scraper defaults to `https://www.between-code-and-culture.tech/` and saves to `published_md/`. Run with no arguments to scrape all posts:
 
-You can hardcode your desired Substack URL and the number of posts you'd like to save into the top of the file and run:
 ```bash
 python substack_scraper.py
 ```
 
-For free Substack sites:
+Scrape a specific number of posts:
 
 ```bash
-python substack_scraper.py --url https://example.substack.com --directory /path/to/save/posts
+python substack_scraper.py --number 10
 ```
 
-For premium Substack sites:
+Scrape a different Substack URL:
 
 ```bash
-python substack_scraper.py --url https://example.substack.com --directory /path/to/save/posts --premium
+python substack_scraper.py --url https://example.substack.com --directory /path/to/save
 ```
 
-To scrape a single post directly:
+Scrape a single post:
 
 ```bash
 python substack_scraper.py --url https://example.substack.com/p/my-post
 ```
 
-To download images locally and rewrite markdown image links:
+Download images locally:
 
 ```bash
-python substack_scraper.py --url https://example.substack.com --images
+python substack_scraper.py --images
 ```
 
-To scrape a specific number of posts:
+Scrape premium (paid) content:
 
 ```bash
-python substack_scraper.py --url https://example.substack.com --directory /path/to/save/posts --number 5
+python substack_scraper.py --premium
 ```
 
-### Online Version
+## Output structure
 
-For a hassle-free experience without any local setup:
+```
+published_md/
+└── between-code-and-culture/
+    ├── 2026-03-10-you-lost-them-before-you-got-there.md
+    ├── 2026-03-02-one-person-is-a-complainer.md
+    └── ...
 
-1. Visit [Substack Reader](https://www.substacktools.com/reader)
-2. Enter the Substack URL you want to read or export
-3. Click "Go" to instantly view the content or "Export" to download Markdown files
+data/
+└── between-code-and-culture.json  # metadata for HTML browser
 
-This online version provides a user-friendly web interface for reading and exporting free Substack articles, with no installation required. However, please note that the online version currently does not support exporting premium content. For full functionality, including premium content export, please use the local script as described above. Built by @Firevvork. 
+substack_html_pages/
+└── between-code-and-culture.html  # browsable interface
+```
 
-## Viewing Markdown Files in Browser
+## Running tests
 
-To read the Markdown files in your browser, install the [Markdown Viewer](https://chromewebstore.google.com/detail/markdown-viewer/ckkdlimhmcjmikdlpkmbgfkaikojcbjk)
-browser extension. But note, we also save the files as HTML for easy viewing, 
-just set the toggle to HTML on the author homepage. 
-
-Or you can use our [Substack Reader](https://www.substacktools.com/reader) online tool, which allows you to read and export free Substack articles directly in your browser. (Note: Premium content export is currently only available in the local script version)
+```bash
+pytest tests/
+```
