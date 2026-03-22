@@ -15,7 +15,6 @@ from typing import List, Optional, Tuple
 from time import sleep
 
 import html2text
-import markdown
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -32,14 +31,14 @@ from selenium.common.exceptions import SessionNotCreatedException, WebDriverExce
 
 from config import EMAIL, PASSWORD
 
-USE_PREMIUM: bool = True
-BASE_SUBSTACK_URL: str = "https://niallferguson.substack.com/"
-BASE_MD_DIR: str = "substack_md_files"
+USE_PREMIUM: bool = False  # Set to True if you want to login to Substack and convert paid for posts
+BASE_SUBSTACK_URL: str = "https://www.between-code-and-culture.tech/"  # Substack you want to convert to markdown
+BASE_MD_DIR: str = "published_md"  # Name of the directory we'll save the .md essay files
 BASE_HTML_DIR: str = "substack_html_pages"
 BASE_IMAGE_DIR: str = "substack_images"
 HTML_TEMPLATE: str = "author_template.html"
 JSON_DATA_DIR: str = "data"
-NUM_POSTS_TO_SCRAPE: int = 0
+NUM_POSTS_TO_SCRAPE: int = 0  # Set to 0 if you want all posts
 
 
 def resolve_image_url(url: str) -> str:
@@ -179,21 +178,21 @@ class BrowserManager:
     """
     Handles browser detection, driver management, and initialization.
     Supports Chrome (preferred) and Edge with robust fallback logic.
-    
+
     Key insight: Instead of trying to move/delete system drivers (requires admin),
     we download to a local cache and use explicit paths, bypassing PATH entirely.
     """
-    
+
     SUPPORTED_BROWSERS = ['chrome', 'edge']
     CACHE_DIR = os.path.join(os.path.expanduser('~'), '.substack_scraper', 'drivers')
-    
+
     @classmethod
     def get_cache_dir(cls) -> str:
         """Get or create the local driver cache directory."""
         if not os.path.exists(cls.CACHE_DIR):
             os.makedirs(cls.CACHE_DIR)
         return cls.CACHE_DIR
-    
+
     @staticmethod
     def get_browser_version(browser: str) -> Optional[str]:
         """
@@ -201,7 +200,7 @@ class BrowserManager:
         Returns version string or None if not found.
         """
         version = None
-        
+
         if browser == 'chrome':
             if os.name == 'nt':  # Windows
                 paths = [
@@ -224,7 +223,7 @@ class BrowserManager:
             else:  # macOS/Linux
                 try:
                     result = subprocess.run(
-                        ['google-chrome', '--version'], 
+                        ['google-chrome', '--version'],
                         capture_output=True, text=True, timeout=10
                     )
                     if result.returncode == 0:
@@ -233,7 +232,7 @@ class BrowserManager:
                             version = match.group(1)
                 except Exception:
                     pass
-                    
+
         elif browser == 'edge':
             if os.name == 'nt':  # Windows
                 paths = [
@@ -255,7 +254,7 @@ class BrowserManager:
             else:  # macOS/Linux
                 try:
                     result = subprocess.run(
-                        ['microsoft-edge', '--version'], 
+                        ['microsoft-edge', '--version'],
                         capture_output=True, text=True, timeout=10
                     )
                     if result.returncode == 0:
@@ -264,9 +263,9 @@ class BrowserManager:
                             version = match.group(1)
                 except Exception:
                     pass
-        
+
         return version
-    
+
     @staticmethod
     def get_driver_version(driver_path: str) -> Optional[str]:
         """Get the version of a webdriver executable."""
@@ -284,7 +283,7 @@ class BrowserManager:
         except Exception:
             pass
         return None
-    
+
     @staticmethod
     def versions_compatible(browser_version: str, driver_version: str) -> bool:
         """Check if browser and driver major versions match."""
@@ -296,7 +295,7 @@ class BrowserManager:
             return browser_major == driver_major
         except (ValueError, IndexError):
             return False
-    
+
     @staticmethod
     def find_stale_drivers() -> List[str]:
         """Find potentially stale driver executables in common PATH locations."""
@@ -311,7 +310,7 @@ class BrowserManager:
             if os.path.exists(path):
                 stale_paths.append(path)
         return stale_paths
-    
+
     @staticmethod
     def get_user_data_dir(browser: str) -> str:
         """Returns a custom user data directory for browser session persistence."""
@@ -319,7 +318,7 @@ class BrowserManager:
         if not os.path.exists(base_dir):
             os.makedirs(base_dir)
         return os.path.join(base_dir, f'{browser}_profile')
-    
+
     @classmethod
     def download_driver_with_requests(cls, browser: str, browser_version: str) -> Optional[str]:
         """
@@ -329,35 +328,35 @@ class BrowserManager:
         """
         import zipfile
         import io
-        
+
         major_version = browser_version.split('.')[0]
         cache_dir = cls.get_cache_dir()
-        
+
         if browser == 'chrome':
             # Chrome for Testing JSON endpoint
             driver_name = 'chromedriver.exe' if os.name == 'nt' else 'chromedriver'
             driver_path = os.path.join(cache_dir, f'chromedriver-{major_version}', driver_name)
-            
+
             # Check if we already have a compatible driver cached
             if os.path.exists(driver_path):
                 cached_version = cls.get_driver_version(driver_path)
                 if cached_version and cls.versions_compatible(browser_version, cached_version):
                     print(f"Using cached chromedriver {cached_version}")
                     return driver_path
-            
+
             try:
                 # Get the latest driver version for this Chrome version
                 print(f"Fetching Chrome driver info for version {major_version}...")
-                
+
                 # Try the Chrome for Testing endpoints
                 endpoints = [
                     f"https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_{major_version}",
                     "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json",
                 ]
-                
+
                 driver_version = None
                 download_url = None
-                
+
                 # Try LATEST_RELEASE endpoint first
                 try:
                     resp = requests.get(endpoints[0], timeout=30)
@@ -368,7 +367,7 @@ class BrowserManager:
                         download_url = f"https://storage.googleapis.com/chrome-for-testing-public/{driver_version}/{platform}/chromedriver-{platform}.zip"
                 except Exception:
                     pass
-                
+
                 # Fallback to JSON endpoint
                 if not download_url:
                     resp = requests.get(endpoints[1], timeout=30)
@@ -377,7 +376,7 @@ class BrowserManager:
                         channels = data.get('channels', {})
                         stable = channels.get('Stable', {})
                         driver_version = stable.get('version', '')
-                        
+
                         if driver_version.startswith(major_version):
                             downloads = stable.get('downloads', {}).get('chromedriver', [])
                             platform = 'win64' if os.name == 'nt' else ('mac-x64' if sys.platform == 'darwin' else 'linux64')
@@ -385,23 +384,23 @@ class BrowserManager:
                                 if d.get('platform') == platform:
                                     download_url = d.get('url')
                                     break
-                
+
                 if not download_url:
                     print(f"Could not find chromedriver download URL for Chrome {major_version}")
                     return None
-                
+
                 print(f"Downloading chromedriver {driver_version}...")
                 resp = requests.get(download_url, timeout=120)
                 if not resp.ok:
                     print(f"Download failed: HTTP {resp.status_code}")
                     return None
-                
+
                 # Extract the driver
                 extract_dir = os.path.join(cache_dir, f'chromedriver-{major_version}')
                 if os.path.exists(extract_dir):
                     shutil.rmtree(extract_dir)
                 os.makedirs(extract_dir)
-                
+
                 with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
                     # Find the chromedriver executable in the zip
                     for name in zf.namelist():
@@ -416,32 +415,32 @@ class BrowserManager:
                                 os.chmod(target_path, 0o755)
                             print(f"[OK] Chromedriver downloaded to: {target_path}")
                             return target_path
-                
+
                 print("Could not find chromedriver in downloaded archive")
                 return None
-                
+
             except Exception as e:
                 print(f"Failed to download chromedriver: {e}")
                 return None
-                
+
         elif browser == 'edge':
             driver_name = 'msedgedriver.exe' if os.name == 'nt' else 'msedgedriver'
             driver_path = os.path.join(cache_dir, f'msedgedriver-{major_version}', driver_name)
-            
+
             # Check cache
             if os.path.exists(driver_path):
                 cached_version = cls.get_driver_version(driver_path)
                 if cached_version and cls.versions_compatible(browser_version, cached_version):
                     print(f"Using cached msedgedriver {cached_version}")
                     return driver_path
-            
+
             try:
                 # Get latest Edge driver version
                 print(f"Fetching Edge driver info for version {major_version}...")
-                
+
                 # Edge driver download URL pattern
                 platform = 'win64' if os.name == 'nt' else ('mac64' if sys.platform == 'darwin' else 'linux64')
-                
+
                 # Try to get the exact version
                 version_url = f"https://msedgedriver.azureedge.net/LATEST_RELEASE_{major_version}"
                 try:
@@ -452,21 +451,21 @@ class BrowserManager:
                         driver_version = browser_version  # Fall back to browser version
                 except Exception:
                     driver_version = browser_version
-                
+
                 download_url = f"https://msedgedriver.azureedge.net/{driver_version}/edgedriver_{platform}.zip"
-                
+
                 print(f"Downloading msedgedriver {driver_version}...")
                 resp = requests.get(download_url, timeout=120)
                 if not resp.ok:
                     print(f"Download failed: HTTP {resp.status_code}")
                     return None
-                
+
                 # Extract
                 extract_dir = os.path.join(cache_dir, f'msedgedriver-{major_version}')
                 if os.path.exists(extract_dir):
                     shutil.rmtree(extract_dir)
                 os.makedirs(extract_dir)
-                
+
                 with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
                     for name in zf.namelist():
                         if name.endswith(driver_name):
@@ -478,14 +477,14 @@ class BrowserManager:
                                 os.chmod(target_path, 0o755)
                             print(f"[OK] msedgedriver downloaded to: {target_path}")
                             return target_path
-                
+
                 print("Could not find msedgedriver in downloaded archive")
                 return None
-                
+
             except Exception as e:
                 print(f"Failed to download msedgedriver: {e}")
                 return None
-        
+
         return None
 
     @classmethod
@@ -500,7 +499,7 @@ class BrowserManager:
     ) -> webdriver.Remote:
         """
         Creates a WebDriver instance with smart fallback logic.
-        
+
         Strategy:
         1. Use explicit driver path if provided
         2. Check our local cache for a compatible driver
@@ -511,7 +510,7 @@ class BrowserManager:
         browser = browser.lower()
         if browser not in cls.SUPPORTED_BROWSERS:
             raise ValueError(f"Unsupported browser: {browser}. Use one of: {cls.SUPPORTED_BROWSERS}")
-        
+
         # Check for stale drivers (for warning purposes only)
         stale_drivers = cls.find_stale_drivers()
         if stale_drivers:
@@ -520,42 +519,42 @@ class BrowserManager:
                 v = cls.get_driver_version(p) or "unknown"
                 print(f"   - {p} (version: {v})")
             print("   We'll try to bypass these by using our own driver cache.\n")
-        
+
         # Detect browser version
         browser_version = cls.get_browser_version(browser)
         print(f"Detected {browser.title()} version: {browser_version or 'unknown'}")
-        
+
         if not browser_version:
             print(f"WARNING: Could not detect {browser.title()} version. Make sure it's installed.")
-        
+
         # Build options
         if browser == 'chrome':
             options = ChromeOptions()
         else:
             options = EdgeOptions()
-            
+
         if headless:
             options.add_argument("--headless=new")
-        
+
         if browser_path:
             options.binary_location = browser_path
-            
+
         if user_agent:
             options.add_argument(f"user-agent={user_agent}")
-        
+
         if use_persistent_profile:
             profile_dir = cls.get_user_data_dir(browser)
             options.add_argument(f"user-data-dir={profile_dir}")
             print(f"Using persistent profile at: {profile_dir}")
-        
+
         # Common options for stability
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920,1080")
-        
+
         errors = []
-        
+
         # Strategy 1: Explicit driver path
         if driver_path and os.path.exists(driver_path):
             try:
@@ -565,7 +564,7 @@ class BrowserManager:
                     print(f"Driver version: {driver_version}")
                     if browser_version and not cls.versions_compatible(browser_version, driver_version):
                         print(f"WARNING: Driver version may not match browser version")
-                
+
                 if browser == 'chrome':
                     service = ChromeService(executable_path=driver_path)
                     return webdriver.Chrome(service=service, options=options)
@@ -575,7 +574,7 @@ class BrowserManager:
             except Exception as e:
                 errors.append(f"Explicit driver path failed: {e}")
                 print(f"[FAIL] Explicit driver path failed: {e}")
-        
+
         # Strategy 2: Download to our cache (primary method - bypasses PATH issues)
         if browser_version:
             print(f"\nDownloading driver to local cache (bypasses system PATH)...")
@@ -592,7 +591,7 @@ class BrowserManager:
             except Exception as e:
                 errors.append(f"Direct download failed: {e}")
                 print(f"[FAIL] Direct download failed: {e}")
-        
+
         # Strategy 3: webdriver_manager with explicit path
         print("\nTrying webdriver_manager...")
         try:
@@ -614,7 +613,7 @@ class BrowserManager:
         except Exception as e:
             errors.append(f"webdriver_manager failed: {e}")
             print(f"[FAIL] webdriver_manager failed: {e}")
-        
+
         # Strategy 4: Let Selenium Manager try (last resort)
         print("\nTrying Selenium Manager (last resort)...")
         try:
@@ -625,21 +624,21 @@ class BrowserManager:
         except Exception as e:
             errors.append(f"Selenium Manager failed: {e}")
             print(f"[FAIL] Selenium Manager failed: {e}")
-        
+
         # All strategies failed
         error_msg = cls._build_error_message(browser, browser_version, stale_drivers, errors)
         raise RuntimeError(error_msg)
-    
+
     @classmethod
     def _build_error_message(
-        cls, 
-        browser: str, 
+        cls,
+        browser: str,
         browser_version: Optional[str],
         stale_drivers: List[str],
         errors: List[str]
     ) -> str:
         """Build a helpful error message when driver creation fails."""
-        
+
         lines = [
             "",
             "=" * 70,
@@ -649,16 +648,16 @@ class BrowserManager:
             f"Could not start {browser.title()} WebDriver.",
             "",
         ]
-        
+
         if browser_version:
             lines.append(f"Your {browser.title()} version: {browser_version}")
             major_version = browser_version.split('.')[0]
         else:
             lines.append(f"Could not detect your {browser.title()} version.")
             major_version = "XXX"
-        
+
         lines.append("")
-        
+
         if stale_drivers:
             lines.extend([
                 "STALE DRIVERS IN SYSTEM PATH:",
@@ -673,13 +672,13 @@ class BrowserManager:
                 "or rename them (e.g., chromedriver.exe.bak)",
                 "",
             ])
-        
+
         lines.extend([
             "HOW TO FIX:",
             "",
             "Option 1: Download the correct driver manually",
         ])
-        
+
         if browser == 'chrome':
             lines.extend([
                 f"   1. Go to: https://googlechromelabs.github.io/chrome-for-testing/",
@@ -694,7 +693,7 @@ class BrowserManager:
                 f"   3. Extract msedgedriver.exe somewhere (e.g., C:\\tools\\msedgedriver.exe)",
                 f"   4. Run with: --edge-driver-path C:\\tools\\msedgedriver.exe",
             ])
-        
+
         lines.extend([
             "",
             "Option 2: Try a different browser",
@@ -705,19 +704,19 @@ class BrowserManager:
         ])
         for path in stale_drivers:
             lines.append(f"   del \"{path}\"")
-        
+
         lines.extend([
             "",
             "-" * 70,
             "Debug info (errors encountered):",
         ])
-        
+
         for i, error in enumerate(errors, 1):
             error_short = str(error)[:300] + "..." if len(str(error)) > 300 else str(error)
             lines.append(f"   {i}. {error_short}")
-        
+
         lines.extend(["", "=" * 70])
-        
+
         return "\n".join(lines)
 
 
@@ -730,7 +729,7 @@ class BaseSubstackScraper(ABC):
         self,
         base_substack_url: str,
         md_save_dir: str,
-        html_save_dir: str,
+        html_save_dir: str = "",
         download_images: bool = False,
     ):
         self.is_single_post: bool = is_post_url(base_substack_url)
@@ -748,14 +747,11 @@ class BaseSubstackScraper(ABC):
         md_save_dir: str = f"{md_save_dir}/{self.writer_name}"
 
         self.md_save_dir: str = md_save_dir
-        self.html_save_dir: str = f"{html_save_dir}/{self.writer_name}"
+        self.html_save_dir: str = html_save_dir
 
         if not os.path.exists(md_save_dir):
             os.makedirs(md_save_dir)
             print(f"Created md directory {md_save_dir}")
-        if not os.path.exists(self.html_save_dir):
-            os.makedirs(self.html_save_dir)
-            print(f"Created html directory {self.html_save_dir}")
 
         self.download_images: bool = download_images
         self.image_dir = Path(BASE_IMAGE_DIR) / self.writer_name
@@ -834,71 +830,69 @@ class BaseSubstackScraper(ABC):
             file.write(content)
 
     @staticmethod
-    def md_to_html(md_content: str) -> str:
-        """Converts Markdown to HTML."""
-        return markdown.markdown(md_content, extensions=['extra'])
-
-    def save_to_html_file(self, filepath: str, content: str) -> None:
-        """Saves HTML content to a file with a link to an external CSS file."""
-        if not isinstance(filepath, str):
-            raise ValueError("filepath must be a string")
-        if not isinstance(content, str):
-            raise ValueError("content must be a string")
-
-        html_dir = os.path.dirname(filepath)
-        css_path = os.path.relpath("./assets/css/essay-styles.css", html_dir)
-        css_path = css_path.replace("\\", "/")
-
-        html_content = f"""
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Markdown Content</title>
-                <link rel="stylesheet" href="{css_path}">
-            </head>
-            <body>
-                <main class="markdown-content">
-                {content}
-                </main>
-            </body>
-            </html>
+    def get_filename_from_url(url: str, filetype: str = ".md", date_prefix: str = "") -> str:
         """
-
-        with open(filepath, 'w', encoding='utf-8') as file:
-            file.write(html_content)
-
-    @staticmethod
-    def get_filename_from_url(url: str, filetype: str = ".md") -> str:
-        """Gets the filename from the URL."""
+        Gets the filename from the URL (the ending), optionally prefixed with a date
+        """
         if not isinstance(url, str):
             raise ValueError("url must be a string")
         if not isinstance(filetype, str):
             raise ValueError("filetype must be a string")
         if not filetype.startswith("."):
             filetype = f".{filetype}"
-        return url.split("/")[-1] + filetype
+
+        base_name = url.split("/")[-1]
+
+        if date_prefix:
+            return f"{date_prefix}-{base_name}{filetype}"
+
+        return base_name + filetype
 
     @staticmethod
-    def combine_metadata_and_content(title: str, subtitle: str, date: str, like_count: str, content) -> str:
-        """Combines the title, subtitle, and content into a single string with Markdown format."""
+    def combine_metadata_and_content(title: str, subtitle: str, author: str, publication: str, tags: List[str], date: str, like_count: str, content: str) -> str:
+        """
+        Combines the title, subtitle, author, publication, tags, and content into a single string with YAML frontmatter
+        """
         if not isinstance(title, str):
             raise ValueError("title must be a string")
         if not isinstance(content, str):
             raise ValueError("content must be a string")
 
-        metadata = f"# {title}\n\n"
+        # Helper to escape YAML strings properly
+        def yaml_escape(s: str) -> str:
+            if not s:
+                return "''"
+            # If string contains special chars, wrap in quotes
+            if any(c in s for c in [":", "'", '"', "\n", "#"]) or s.strip() != s:
+                # Escape single quotes by doubling them
+                return f"'{s.replace(chr(39), chr(39)+chr(39))}'"
+            return s
+
+        # Build YAML frontmatter
+        frontmatter = "---\n"
+        frontmatter += f"title: {yaml_escape(title)}\n"
         if subtitle:
-            metadata += f"## {subtitle}\n\n"
-        metadata += f"**{date}**\n\n"
-        metadata += f"**Likes:** {like_count}\n\n"
+            frontmatter += f"subtitle: {yaml_escape(subtitle)}\n"
+        if author:
+            frontmatter += f"author: {yaml_escape(author)}\n"
+        if publication:
+            frontmatter += f"publication: {yaml_escape(publication)}\n"
+        frontmatter += f"date: {date}\n"
+        if tags:
+            # Format tags as YAML array
+            frontmatter += "tags:\n"
+            for tag in tags:
+                frontmatter += f"  - {yaml_escape(tag)}\n"
+        frontmatter += "---\n\n"
 
-        return metadata + content
+        return frontmatter + content
 
-    def extract_post_data(self, soup: BeautifulSoup) -> Tuple[str, str, str, str, str]:
-        """Converts a Substack post soup to markdown, returning metadata and content."""
-        # Title
+    def extract_post_data(self, soup: BeautifulSoup) -> Tuple[str, str, str, str, List[str], str, str, str]:
+        """
+        Converts a Substack post soup to markdown, returning metadata and content.
+        Returns (title, subtitle, author, publication, tags, like_count, date, md_content).
+        """
+        # Title (sometimes h2 if video present)
         title_element = soup.select_one("h1.post-title, h2")
         title = title_element.text.strip() if title_element else "Untitled"
 
@@ -906,13 +900,55 @@ class BaseSubstackScraper(ABC):
         subtitle_element = soup.select_one("h3.subtitle, div.subtitle-HEEcLo")
         subtitle = subtitle_element.text.strip() if subtitle_element else ""
 
-        # Date
-        date = ""
-        date_element = soup.select_one("div.meta-EgzBVA")
-        if date_element and date_element.text.strip():
-            date = date_element.text.strip()
+        # Author name - try meta tag first
+        author = ""
+        author_meta = soup.find("meta", {"name": "author"})
+        if author_meta:
+            author = author_meta.get('content', '').strip()
 
-        if not date:
+        # Publication name - extract from JSON-LD
+        publication = ""
+        script_tag = soup.find("script", {"type": "application/ld+json"})
+        if script_tag and script_tag.string:
+            try:
+                metadata = json.loads(script_tag.string)
+                # Handle both dict and list formats
+                if isinstance(metadata, list):
+                    metadata = metadata[0] if metadata else {}
+                if "publisher" in metadata and isinstance(metadata["publisher"], dict):
+                    publication = metadata["publisher"].get("name", "").strip()
+            except (json.JSONDecodeError, ValueError, KeyError):
+                pass
+
+        # Tags - look for keywords meta tag or article:tag
+        tags = []
+        # Try article:tag meta tags
+        tag_elements = soup.find_all("meta", {"property": "article:tag"})
+        if tag_elements:
+            tags = [tag.get('content', '').strip() for tag in tag_elements if tag.get('content')]
+
+        # Try keywords meta tag as fallback
+        if not tags:
+            keywords_meta = soup.find("meta", {"name": "keywords"})
+            if keywords_meta and keywords_meta.get('content'):
+                tags = [k.strip() for k in keywords_meta.get('content', '').split(',') if k.strip()]
+
+        # Date — try CSS selector first
+        date = ""
+        date_obj = None
+        date_element = soup.select_one("div.pencraft.pc-reset.color-pub-secondary-text-hGQ02T")
+        if date_element and date_element.text.strip():
+            date_str = date_element.text.strip()
+            # Try to parse various date formats
+            for fmt in ["%b %d, %Y", "%B %d, %Y", "%Y-%m-%d"]:
+                try:
+                    date_obj = datetime.strptime(date_str, fmt)
+                    break
+                except ValueError:
+                    continue
+
+        # Fallback: JSON-LD metadata
+        if not date_obj:
             script_tag = soup.find("script", {"type": "application/ld+json"})
             if script_tag and script_tag.string:
                 try:
@@ -920,11 +956,13 @@ class BaseSubstackScraper(ABC):
                     if "datePublished" in metadata:
                         date_str = metadata["datePublished"]
                         date_obj = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-                        date = date_obj.strftime("%b %d, %Y")
                 except (json.JSONDecodeError, ValueError, KeyError):
                     pass
 
-        if not date:
+        # Format date as YYYY-MM-DD for Obsidian
+        if date_obj:
+            date = date_obj.strftime("%Y-%m-%d")
+        else:
             date = "Date not found"
 
         # Like count
@@ -940,9 +978,10 @@ class BaseSubstackScraper(ABC):
         content_html = str(content_element) if content_element else ""
         md = self.html_to_md(content_html)
 
-        md_content = self.combine_metadata_and_content(title, subtitle, date, like_count, md)
+        # Combine metadata + content
+        md_content = self.combine_metadata_and_content(title, subtitle, author, publication, tags, date, like_count, md)
 
-        return title, subtitle, like_count, date, md_content
+        return title, subtitle, author, publication, tags, like_count, date, md_content
 
     @abstractmethod
     def get_url_soup(self, url: str) -> str:
@@ -963,61 +1002,49 @@ class BaseSubstackScraper(ABC):
             json.dump(essays_data, f, ensure_ascii=False, indent=4)
 
     def scrape_posts(self, num_posts_to_scrape: int = 0) -> None:
-        """Iterates over all posts and saves them as markdown and html files."""
+        """Iterates over all posts and saves them as markdown files."""
         essays_data = []
         count = 0
         total = num_posts_to_scrape if num_posts_to_scrape != 0 else len(self.post_urls)
-        with tqdm(total=total, desc="Scraping posts") as pbar:
-            for url in self.post_urls:
-                try:
-                    md_filename = self.get_filename_from_url(url, filetype=".md")
-                    html_filename = self.get_filename_from_url(url, filetype=".html")
-                    md_filepath = os.path.join(self.md_save_dir, md_filename)
-                    html_filepath = os.path.join(self.html_save_dir, html_filename)
 
-                    if not os.path.exists(md_filepath):
-                        soup = self.get_url_soup(url)
-                        if soup is None:
-                            total += 1
-                            pbar.total = total
-                            pbar.refresh()
-                            continue
+        for url in tqdm(self.post_urls, total=total):
+            try:
+                # First, get the soup to extract the date
+                soup = self.get_url_soup(url)
+                if soup is None:
+                    total += 1
+                    continue
 
-                        title, subtitle, like_count, date, md = self.extract_post_data(soup)
+                # Extract post data to get the date
+                title, subtitle, author, publication, tags, like_count, date, md = self.extract_post_data(soup)
 
-                        if self.download_images:
-                            total_images = count_images_in_markdown(md)
-                            slug = get_post_slug(url) if is_post_url(url) else url.rstrip('/').split('/')[-1]
-                            with tqdm(
-                                total=total_images,
-                                desc=f"Downloading images for {slug}",
-                                leave=False,
-                            ) as img_pbar:
-                                md = process_markdown_images(md, self.writer_name, slug, img_pbar)
+                # Generate filename with date prefix
+                date_prefix = date if date != "Date not found" else ""
+                md_filename = self.get_filename_from_url(url, filetype=".md", date_prefix=date_prefix)
+                md_filepath = os.path.join(self.md_save_dir, md_filename)
 
-                        self.save_to_file(md_filepath, md)
-                        html_content = self.md_to_html(md)
-                        self.save_to_html_file(html_filepath, html_content)
+                if not os.path.exists(md_filepath):
+                    self.save_to_file(md_filepath, md)
 
-                        essays_data.append({
-                            "title": title,
-                            "subtitle": subtitle,
-                            "like_count": like_count,
-                            "date": date,
-                            "file_link": md_filepath,
-                            "html_link": html_filepath
-                        })
-                    else:
-                        pbar.write(f"File already exists: {md_filepath}")
-                except Exception as e:
-                    pbar.write(f"Error scraping post: {e}")
+                    essays_data.append({
+                        "title": title,
+                        "subtitle": subtitle,
+                        "author": author,
+                        "publication": publication,
+                        "tags": tags,
+                        "like_count": like_count,
+                        "date": date,
+                        "file_link": md_filepath
+                    })
+                else:
+                    print(f"File already exists: {md_filepath}")
+            except Exception as e:
+                print(f"Error scraping post: {e}")
+            count += 1
+            if num_posts_to_scrape != 0 and count == num_posts_to_scrape:
+                break
 
-                count += 1
-                pbar.update(1)
-                if num_posts_to_scrape != 0 and count == num_posts_to_scrape:
-                    break
         self.save_essays_data_to_json(essays_data=essays_data)
-        generate_html_file(author_name=self.writer_name)
 
 
 # =============================================================================
@@ -1029,7 +1056,7 @@ class SubstackScraper(BaseSubstackScraper):
         self,
         base_substack_url: str,
         md_save_dir: str,
-        html_save_dir: str,
+        html_save_dir: str = "",
         download_images: bool = False,
     ):
         super().__init__(base_substack_url, md_save_dir, html_save_dir, download_images)
@@ -1073,7 +1100,7 @@ class PremiumSubstackScraper(BaseSubstackScraper):
         self,
         base_substack_url: str,
         md_save_dir: str,
-        html_save_dir: str,
+        html_save_dir: str = "",
         download_images: bool = False,
         browser: str = 'chrome',
         headless: bool = False,
@@ -1085,7 +1112,7 @@ class PremiumSubstackScraper(BaseSubstackScraper):
     ) -> None:
         """
         Initialize the premium scraper with browser automation.
-        
+
         Args:
             base_substack_url: The Substack URL to scrape
             md_save_dir: Directory for markdown files
@@ -1107,10 +1134,10 @@ class PremiumSubstackScraper(BaseSubstackScraper):
             user_agent=user_agent,
             use_persistent_profile=use_persistent_profile,
         )
-        
+
         self.skip_login = skip_login
         self.use_persistent_profile = use_persistent_profile
-        
+
         if not skip_login:
             self.login()
         else:
@@ -1140,7 +1167,7 @@ class PremiumSubstackScraper(BaseSubstackScraper):
 
         submit = self.driver.find_element(By.XPATH, "//*[@id=\"substack-login\"]/div[2]/div[2]/form/button")
         submit.click()
-        
+
         print("Waiting for login to complete (this may take up to 30 seconds)...")
         sleep(30)
 
@@ -1152,9 +1179,9 @@ class PremiumSubstackScraper(BaseSubstackScraper):
                 "  2. Use --persistent-profile to save your session\n"
                 "  3. Then run with --skip-login on subsequent runs"
             )
-        
+
         print("[OK] Login successful!")
-        
+
         if self.use_persistent_profile:
             print("[OK] Session saved to persistent profile")
 
@@ -1188,7 +1215,7 @@ class PremiumSubstackScraper(BaseSubstackScraper):
                 raise ValueError(f"Error fetching page: {url}. Error: {e}") from e
 
         raise RuntimeError(f"Failed to fetch page after {max_attempts} attempts: {url}")
-    
+
     def __del__(self):
         """Clean up the driver when done."""
         if hasattr(self, 'driver') and self.driver:
@@ -1210,21 +1237,21 @@ def parse_args() -> argparse.Namespace:
 Examples:
   # Scrape free posts
   python substack_scraper.py --url https://example.substack.com
-  
+
   # Scrape premium posts with Chrome (recommended)
   python substack_scraper.py --url https://example.substack.com --premium --browser chrome
-  
+
   # First run with persistent profile (complete login/CAPTCHA manually)
   python substack_scraper.py --url https://example.substack.com --premium --persistent-profile
-  
+
   # Subsequent runs (skip login, use saved session)
   python substack_scraper.py --url https://example.substack.com --premium --persistent-profile --skip-login
-  
+
   # Use manually downloaded driver
   python substack_scraper.py --url https://example.substack.com --premium --chrome-driver-path /path/to/chromedriver
         """
     )
-    
+
     parser.add_argument(
         "-u", "--url", type=str,
         help="The base URL of the Substack site to scrape."
@@ -1246,7 +1273,7 @@ Examples:
         action="store_true",
         help="Download images and update markdown to use local paths."
     )
-    
+
     # Premium scraping options
     premium_group = parser.add_argument_group('Premium scraping options')
     premium_group.add_argument(
@@ -1269,7 +1296,7 @@ Examples:
         "--skip-login", action="store_true",
         help="Skip login (use with --persistent-profile after first login)."
     )
-    
+
     # Driver path options
     driver_group = parser.add_argument_group('Driver options (for troubleshooting)')
     driver_group.add_argument(

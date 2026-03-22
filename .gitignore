@@ -1,5 +1,12 @@
 # Ignore Python-related files
 config.py
+.env
+
+# Ignore macOS metadata
+.DS_Store
+
+# Ignore published markdown output
+published_md/
 setup.py
 **/__pycache__/
 
